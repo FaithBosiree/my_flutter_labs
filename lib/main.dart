@@ -7,7 +7,7 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
+  // root widget of your app
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -54,7 +54,10 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  var _counter = 0.0;
+  var myFontSize = 30.0;
+  var sliderValue = 0.0;
+
 
   void _incrementCounter() {
     setState(() {
@@ -66,9 +69,18 @@ class _MyHomePageState extends State<MyHomePage> {
       _counter++;
     });
   }
+  _setNewValue(double value) {
+    setState(() {
+      sliderValue = value;
+      myFontSize = value;
+      _counter = value;
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
+    TextStyle _myFontStyle = TextStyle( fontSize: myFontSize);
     // This method is rerun every time setState is called, for instance as done
     // by the _incrementCounter method above.
     //
@@ -104,11 +116,13 @@ class _MyHomePageState extends State<MyHomePage> {
           // wireframe for each widget.
           mainAxisAlignment: .center,
           children: [
-            const Text('You have pushed the button this many times:'),
+            Text('You have pushed the button this many times:',
+            style: _myFontStyle),
             Text(
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
+            Slider(value:sliderValue, max:100.0, onChanged: _setNewValue, min:0.0 )
           ],
         ),
       ),
