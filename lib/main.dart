@@ -133,7 +133,7 @@ class _RecipePageState extends State<RecipePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(" "),
+        title: const Text(" Mobile App "),
       ),
       // task 5: set body to a SingleChildScrollView wrapping createLayout()
       body: SingleChildScrollView(
