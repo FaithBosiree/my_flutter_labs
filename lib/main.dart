@@ -22,11 +22,12 @@ class DataRepository {
 
   // Load variables from EncryptedSharedPreferences asynchronously
   static Future<void> loadData() async {
-    loginName = await _encryptedPrefs.getString('username') ?? '';
-    firstName = await _encryptedPrefs.getString('firstName') ?? '';
-    lastName = await _encryptedPrefs.getString('lastName') ?? '';
-    phoneNumber = await _encryptedPrefs.getString('phoneNumber') ?? '';
-    emailAddress = await _encryptedPrefs.getString('emailAddress') ?? '';
+    // The library returns an empty string if nothing is stored yet, no '??' needed!
+    loginName = await _encryptedPrefs.getString('username');
+    firstName = await _encryptedPrefs.getString('firstName');
+    lastName = await _encryptedPrefs.getString('lastName');
+    phoneNumber = await _encryptedPrefs.getString('phoneNumber');
+    emailAddress = await _encryptedPrefs.getString('emailAddress');
   }
 
   // Save variables to EncryptedSharedPreferences asynchronously
