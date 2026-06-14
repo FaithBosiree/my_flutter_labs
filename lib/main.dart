@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart'; 
 
 void main() {
   runApp(const MyApp());
@@ -11,144 +12,153 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: RecipePage(),
+      home: LoginPage(),
     );
   }
 }
 
-class RecipePage extends StatefulWidget {
-  const RecipePage({super.key});
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
   @override
-  State<RecipePage> createState() => _RecipePageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
-class _RecipePageState extends State<RecipePage> {
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController usernameController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
-  // --- task 5: The createLayout() function ---
-  // This builds the top-level Column layout and returns it to the Scaffold body.
-  Widget createLayout() {
-    return Column(
-      // task 2: Use SpaceBetween alignment for the outer Column layout
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Screen Header Text
-        const Padding(
-          padding: EdgeInsets.only(left: 16.0, top: 16.0, bottom: 8.0),
-          child: Text(
-            "Favorite Recipes",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-        ),
+  String imageSource = "images/question-mark.jpg";
 
-        // task 1: 6 individual items displayed inside the Column.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          child: Row(
-            children: [
-              Expanded(child: buildRecipeItem("images/veggie.jpg", "Veggie Stir-fry", "Colorful, crisp, vibrant")),
-              const SizedBox(width: 12),
-              Expanded(child: buildRecipeItem("images/salad.jpg", "Caesar Salad", "Crisp, creamy, tangy")),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
+  // Synchronous constructor instantiation as per instructions
+  final EncryptedSharedPreferences _encryptedPrefs = EncryptedSharedPreferences();
 
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          child: Row(
-            children: [
-              Expanded(child: buildRecipeItem("images/sushi.jpg", "Sushi Rolls", "Fresh, delicate, flavorful")),
-              const SizedBox(width: 12),
-              Expanded(child: buildRecipeItem("images/brownie.jpg", "Chocolate Brownie", "Rich, fudgy, sweet")),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          child: Row(
-            children: [
-              Expanded(child: buildRecipeItem("images/salmon.jpg", "Grilled Salmon", "Juicy, smoky, healthy")),
-              const SizedBox(width: 12),
-              Expanded(child: buildRecipeItem("images/beef.jpg", "Beef Tacos", "Spicy, crunchy, tasty")),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
+  @override
+  void initState() {
+    super.initState();
+    // Load saved credentials when the application starts
+    _loadSavedCredentials();
   }
 
-  // builder ()
-  // task 3: item-->Image, Heart icon-->top right,two text strings below.
-  Widget buildRecipeItem(String imagePath, String title, String subtitle) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Stacking layers (heart icon) on top of image
-        Stack(
-          children: [
-            // ClipRRect-->  rounded image corners
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16.0),
-              child: Image.asset(
-                imagePath,
-                height: 150,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
+  // Asynchronous retrieval of stored data
+  Future<void> _loadSavedCredentials() async {
+    String savedUser = await _encryptedPrefs.getString('username');
+    String savedPass = await _encryptedPrefs.getString('password');
+
+    if (savedUser.isNotEmpty && savedPass.isNotEmpty) {
+      setState(() {
+        usernameController.text = savedUser;
+        passwordController.text = savedPass;
+      });
+
+      // SnackBar-confirming the reloading4
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Previous login name and passwords have been loaded."),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  // Function to save data to EncryptedSharedPreferences
+  Future<void> _saveCredentials() async {
+    await _encryptedPrefs.setString('username', usernameController.text);
+    await _encryptedPrefs.setString('password', passwordController.text);
+  }
+
+  // Function to clear data from EncryptedSharedPreferences
+  Future<void> _clearCredentials() async {
+    await _encryptedPrefs.clear(); // Or remove specific keys: _encryptedPrefs.setString('username', '');
+  }
+
+  // Function to display the AlertDialog
+  void _showSaveCredentialsDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must tap a button to dismiss
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Save Credentials"),
+          content: const Text("Would you like to save your username and password for the next time you run the application?"),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _clearCredentials();
+                if (mounted) Navigator.of(context).pop();
+              },
+              child: const Text("No"),
             ),
-            // Positioned pushes heart widget to top right corner
-            const Positioned(
-              top: 8,
-              right: 8,
-              child: CircleAvatar(
-                backgroundColor: Colors.black26,
-                radius: 16,
-                child: Icon(Icons.favorite, color: Colors.white, size: 18),
-              ),
+            TextButton(
+              onPressed: () async {
+                await _saveCredentials();
+                if (mounted) Navigator.of(context).pop();
+              },
+              child: const Text("Yes"),
             ),
           ],
-        ),
-        const SizedBox(height: 8),
-        // Item Name string
-        Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 2),
-        // Item Description string
-        Text(
-          subtitle,
-          style: const TextStyle(color: Colors.grey, fontSize: 13),
-        ),
-      ],
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(" "),
-      ),
-      // task 5: set body to a SingleChildScrollView wrapping createLayout()
-      body: SingleChildScrollView(
-        child: createLayout(),
-      ),
-      // task 4: BottomNavigationBar has 5 items with empty text labels
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 2, // Highlights the middle heart icon by default
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: ""),
+      appBar: AppBar(title: const Text("Login Page")),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: TextField(
+              controller: usernameController,
+              decoration: const InputDecoration(
+                labelText: "Login Name",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "Password",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: ElevatedButton(
+              onPressed: () {
+                String password = passwordController.text;
+
+                setState(() {
+                  if (password == "ASDF") {
+                    imageSource = "images/lightbulb.jpg";
+                  } else {
+                    imageSource = "images/stop.jpg";
+                  }
+                });
+
+                // Trigger the AlertDialog challenge requirements
+                _showSaveCredentialsDialog();
+              },
+              child: const Text("Login"),
+            ),
+          ),
+          Semantics(
+            label: "Login result image",
+            child: Image.asset(
+              imageSource,
+              width: 300,
+              height: 300,
+            ),
+          ),
         ],
       ),
     );
