@@ -1,48 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-
-// 1. REPOSITORY PATTERN CLASS
-
-class DataRepository {
-  static String loginName = '';
-
-  // Profile Form fields
-  static String firstName = '';
-  static String lastName = '';
-  static String phoneNumber = '';
-  static String emailAddress = '';
-
-  static final EncryptedSharedPreferences _encryptedPrefs = EncryptedSharedPreferences();
-
-  // Load variables from EncryptedSharedPreferences asynchronously
-  static Future<void> loadData() async {
-    // The library returns an empty string if nothing is stored yet, no '??' needed!
-    loginName = await _encryptedPrefs.getString('username');
-    firstName = await _encryptedPrefs.getString('firstName');
-    lastName = await _encryptedPrefs.getString('lastName');
-    phoneNumber = await _encryptedPrefs.getString('phoneNumber');
-    emailAddress = await _encryptedPrefs.getString('emailAddress');
-  }
-
-  // Save variables to EncryptedSharedPreferences asynchronously
-  static Future<void> saveData() async {
-    await _encryptedPrefs.setString('username', loginName);
-    await _encryptedPrefs.setString('firstName', firstName);
-    await _encryptedPrefs.setString('lastName', lastName);
-    await _encryptedPrefs.setString('phoneNumber', phoneNumber);
-    await _encryptedPrefs.setString('emailAddress', emailAddress);
-  }
-}
-
-// ==========================================
-// 2. MATERIAL APP STRUCTURE WITH NAMED ROUTES
-// ==========================================
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -50,241 +11,188 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const LoginPage(),
-        '/profile': (context) => const ProfilePage(),
-      },
+      title: 'Shopping List App',
+      theme: ThemeData(
+        // app ui
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFD7C4FA),
+          foregroundColor: Colors.black,
+        ),
+      ),
+      home: const ShoppingPage(),
     );
   }
 }
 
-// ==========================================
-// 3. UPDATED LOGIN PAGE
-// ==========================================
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+// Stores the item name and its quantity together
+class ShoppingItem {
+  String name;
+  String quantity;
 
-  @override
-  State<LoginPage> createState() => _LoginPageState();
+  ShoppingItem({required this.name, required this.quantity});
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final TextEditingController usernameController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-
-  String imageSource = "images/question-mark.jpg";
+class ShoppingPage extends StatefulWidget {
+  const ShoppingPage({super.key});
 
   @override
-  void initState() {
-    super.initState();
-    _initializeRepoAndLoad();
+  State<ShoppingPage> createState() => _ShoppingPageState();
+}
+
+class _ShoppingPageState extends State<ShoppingPage> {
+  // list for shopping items
+  final List<ShoppingItem> _shoppingList = [];
+
+  // text input controllers
+  final TextEditingController _itemController = TextEditingController();
+  final TextEditingController _quantityController = TextEditingController();
+
+  // UI-widget isolation
+  Widget ListPage() {
+    return Column(
+      children: [
+        // list arrangement
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 16.0),
+          child: Row(
+            children: [
+              // item name input field
+              Expanded(
+                child: Container(
+                  height: 50,
+                  margin: const EdgeInsets.only(right: 4),
+                  child: TextField(
+                    controller: _itemController,
+                    decoration: const InputDecoration(
+                      hintText: 'Type the item here',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                    ),
+                  ),
+                ),
+              ),
+              // Quantity Input Field
+              Expanded(
+                child: Container(
+                  height: 50,
+                  margin: const EdgeInsets.only(right: 8),
+                  child: TextField(
+                    controller: _quantityController,
+                    decoration: const InputDecoration(
+                      hintText: 'Type the quantity here',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                    ),
+                  ),
+                ),
+              ),
+              // action button, Click here.
+              SizedBox(
+                height: 50,
+                child: OutlinedButton(
+                  onPressed: _addItem,
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF6F2FF),
+                    side: BorderSide(color: Colors.grey.shade300),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: const Text(
+                    'Click here',
+                    style: TextStyle(color: Color(0xFF7A52B3)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // interactive item list
+        Expanded(
+          child: _shoppingList.isEmpty
+              ? const Center(
+            // Required backup text display when item list tracking is zero
+            child: Text(
+              "There are no items in the list",
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          )
+              : ListView.builder(
+            itemCount: _shoppingList.length,
+            itemBuilder: (context, index) {
+              final currentItem = _shoppingList[index];
+              final rowNumber = index + 1;
+
+              // 3: gesture detector tracking targeting individual rows
+              return GestureDetector(
+                onLongPress: () => _showDeleteDialog(index, currentItem.name),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Format: "X: ItemName quantity: Y" as requested and visually indicated
+                      Text(
+                        "$rowNumber: ${currentItem.name}  quantity: ${currentItem.quantity}",
+                        style: const TextStyle(fontSize: 16, color: Colors.black),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
-  // Load repository fields on the first page once your app loads
-  Future<void> _initializeRepoAndLoad() async {
-    await DataRepository.loadData();
-    if (DataRepository.loginName.isNotEmpty) {
-      setState(() {
-        usernameController.text = DataRepository.loginName;
-      });
+  // Adds typed text elements to data arrays and mutates state
+  void _addItem() {
+    final String nameInput = _itemController.text.trim();
+    final String qtyInput = _quantityController.text.trim();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Previous login name and passwords have been loaded."),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
+    if (nameInput.isNotEmpty && qtyInput.isNotEmpty) {
+      setState(() {
+        // //1: Typing an item in the TextField and clicking the "add" button makes the item appear in the list.
+        _shoppingList.add(ShoppingItem(name: nameInput, quantity: qtyInput));
+
+        // //2: After inserting an item, the TextField is cleared so that the previous string is gone.
+        _itemController.clear();
+        _quantityController.clear();
+      });
     }
   }
 
-  void _showSaveCredentialsDialog(bool isPasswordCorrect) {
+  // Triggers an AlertDialog popup confirming item row processing deletion routines
+  void _showDeleteDialog(int index, String itemName) {
+    // //3: If the user long-presses an item in the list, an AlertDialog appears asking if they want to delete the item.
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text("Save Credentials"),
-          content: const Text("Would you like to save your username and password for the next time you run the application?"),
+          title: const Text("Delete Item"),
+          content: Text("Are you sure you want to delete '$itemName'?"),
           actions: [
             TextButton(
-              onPressed: () async {
-                // Clear or reset stored data on 'No' selection
-                DataRepository.loginName = '';
-                await DataRepository.saveData();
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  _handlePostLoginNavigation(isPasswordCorrect);
-                }
+              onPressed: () {
+                // //task 5: Selecting "No" from the AlertDialog does not remove the item from the list.
+                Navigator.of(context).pop();
               },
               child: const Text("No"),
             ),
             TextButton(
-              onPressed: () async {
-                DataRepository.loginName = usernameController.text;
-                await DataRepository.saveData();
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  _handlePostLoginNavigation(isPasswordCorrect);
-                }
-              },
-              child: const Text("Yes"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _handlePostLoginNavigation(bool isPasswordCorrect) {
-    if (isPasswordCorrect) {
-      // Show Welcome Back Snackbar message using the login name from the first page
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Welcome Back ${usernameController.text}"),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-
-      // Navigate to your new profile page using Named Routes
-      Navigator.pushNamed(context, '/profile');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Login Page")),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: TextField(
-              controller: usernameController,
-              decoration: const InputDecoration(
-                labelText: "Login Name",
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: "Password",
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: ElevatedButton(
               onPressed: () {
-                bool isCorrect = (passwordController.text == "ASDF");
-
+                // //task 4: Selecting "Yes" from the AlertDialog removes the item from the list.
                 setState(() {
-                  if (isCorrect) {
-                    imageSource = "images/lightbulb.jpg";
-                  } else {
-                    imageSource = "images/stop.jpg";
-                  }
+                  _shoppingList.removeAt(index);
                 });
-
-                _showSaveCredentialsDialog(isCorrect);
+                Navigator.of(context).pop();
               },
-              child: const Text("Login"),
+              child: const Text("Yes", style: TextStyle(color: Colors.red)),
             ),
-          ),
-          Semantics(
-            label: "Login result image",
-            child: Image.asset(
-              imageSource,
-              width: 300,
-              height: 300,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 4. NEW SECOND PAGE: PROFILE PAGE
-// ==========================================
-class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
-
-  @override
-  State<ProfilePage> createState() => _ProfilePageState();
-}
-
-class _ProfilePageState extends State<ProfilePage> {
-  final TextEditingController firstNameController = TextEditingController();
-  final TextEditingController lastNameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Distribute data from repository directly into fields
-    firstNameController.text = DataRepository.firstName;
-    lastNameController.text = DataRepository.lastName;
-    phoneController.text = DataRepository.phoneNumber;
-    emailController.text = DataRepository.emailAddress;
-
-    // Use addListener to save values down to repository whenever text edits occur
-    firstNameController.addListener(() {
-      DataRepository.firstName = firstNameController.text;
-      DataRepository.saveData();
-    });
-    lastNameController.addListener(() {
-      DataRepository.lastName = lastNameController.text;
-      DataRepository.saveData();
-    });
-    phoneController.addListener(() {
-      DataRepository.phoneNumber = phoneController.text;
-      DataRepository.saveData();
-    });
-    emailController.addListener(() {
-      DataRepository.emailAddress = emailController.text;
-      DataRepository.saveData();
-    });
-  }
-
-  // Universal helper function to check protocols safely using canLaunch / .then() patterns
-  void _launchProtocolUrl(String urlString) {
-    final Uri urlUri = Uri.parse(urlString);
-
-    // ignore: deprecated_member_use
-    canLaunchUrl(urlUri).then((bool itCan) {
-      if (itCan) {
-        // ignore: deprecated_member_use
-        launchUrl(urlUri);
-      } else {
-        _showUnsupportedSchemeDialog(urlString);
-      }
-    });
-  }
-
-  void _showUnsupportedSchemeDialog(String url) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Not Supported"),
-          content: Text("The URL format '$url' is not supported on this device."),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text("OK"),
-            )
           ],
         );
       },
@@ -293,113 +201,22 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   void dispose() {
-    firstNameController.dispose();
-    lastNameController.dispose();
-    phoneController.dispose();
-    emailController.dispose();
+    _itemController.dispose();
+    _quantityController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Profile")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top welcome text showing the username from page 1
-            Text(
-              "Welcome Back ${DataRepository.loginName}",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-
-            // First Name Field
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: TextField(
-                controller: firstNameController,
-                decoration: const InputDecoration(
-                  labelText: "First Name",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-
-            // Last Name Field
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: TextField(
-                controller: lastNameController,
-                decoration: const InputDecoration(
-                  labelText: "Last Name",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-
-            // Phone Number Row with integrated call/text buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
-                children: [
-                  Flexible(
-                    child: TextField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: "Phone Number",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.phone),
-                    onPressed: () {
-                      _launchProtocolUrl("tel:${phoneController.text.trim()}");
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.comment),
-                    onPressed: () {
-                      _launchProtocolUrl("sms:${phoneController.text.trim()}");
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            // Email Address Row with integrated mailto button
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
-                children: [
-                  Flexible(
-                    child: TextField(
-                      controller: emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: "Email address",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.mail),
-                    onPressed: () {
-                      _launchProtocolUrl("mailto:${emailController.text.trim()}");
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Flutter Demo Home Page'),
+        centerTitle: true,
+        elevation: 0,
       ),
+      // Running clean decoupled function tracking UI components
+      body: ListPage(),
     );
   }
 }
