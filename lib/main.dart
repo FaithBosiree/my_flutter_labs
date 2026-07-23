@@ -1,222 +1,266 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'database/app_database.dart';
+import 'database/shopping_item.dart';
+import 'database/shopping_item_dao.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final AppDatabase database = await $FloorAppDatabase
+      .databaseBuilder('shopping_database.db')
+      .build();
+
+  runApp(
+    MyApp(database: database),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final AppDatabase database;
+
+  const MyApp({
+    super.key,
+    required this.database,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Shopping List App',
+      title: 'Shopping List',
       theme: ThemeData(
-        // app ui
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFD7C4FA),
-          foregroundColor: Colors.black,
-        ),
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
       ),
-      home: const ShoppingPage(),
+      home: ShoppingListPage(database: database),
     );
   }
 }
 
-// Stores the item name and its quantity together
-class ShoppingItem {
-  String name;
-  String quantity;
+class ShoppingListPage extends StatefulWidget {
+  final AppDatabase database;
 
-  ShoppingItem({required this.name, required this.quantity});
-}
-
-class ShoppingPage extends StatefulWidget {
-  const ShoppingPage({super.key});
+  const ShoppingListPage({
+    super.key,
+    required this.database,
+  });
 
   @override
-  State<ShoppingPage> createState() => _ShoppingPageState();
+  State<ShoppingListPage> createState() => _ShoppingListPageState();
 }
 
-class _ShoppingPageState extends State<ShoppingPage> {
-  // list for shopping items
-  final List<ShoppingItem> _shoppingList = [];
+class _ShoppingListPageState extends State<ShoppingListPage> {
+  final TextEditingController itemController = TextEditingController();
+  final TextEditingController quantityController = TextEditingController();
 
-  // text input controllers
-  final TextEditingController _itemController = TextEditingController();
-  final TextEditingController _quantityController = TextEditingController();
+  final List<ShoppingItem> shoppingList = [];
 
-  // UI-widget isolation
-  Widget ListPage() {
-    return Column(
-      children: [
-        // list arrangement
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 16.0),
-          child: Row(
-            children: [
-              // item name input field
-              Expanded(
-                child: Container(
-                  height: 50,
-                  margin: const EdgeInsets.only(right: 4),
-                  child: TextField(
-                    controller: _itemController,
-                    decoration: const InputDecoration(
-                      hintText: 'Type the item here',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                    ),
-                  ),
-                ),
-              ),
-              // Quantity Input Field
-              Expanded(
-                child: Container(
-                  height: 50,
-                  margin: const EdgeInsets.only(right: 8),
-                  child: TextField(
-                    controller: _quantityController,
-                    decoration: const InputDecoration(
-                      hintText: 'Type the quantity here',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                    ),
-                  ),
-                ),
-              ),
-              // action button, Click here.
-              SizedBox(
-                height: 50,
-                child: OutlinedButton(
-                  onPressed: _addItem,
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF6F2FF),
-                    side: BorderSide(color: Colors.grey.shade300),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                  child: const Text(
-                    'Click here',
-                    style: TextStyle(color: Color(0xFF7A52B3)),
-                  ),
-                ),
-              ),
-            ],
-          ),
+  late final ShoppingItemDao shoppingItemDao;
+
+  @override
+  void initState() {
+    super.initState();
+
+    shoppingItemDao = widget.database.shoppingItemDao;
+    loadShoppingItems();
+  }
+
+  Future<void> loadShoppingItems() async {
+    final List<ShoppingItem> savedItems =
+    await shoppingItemDao.getAllItems();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      shoppingList.clear();
+      shoppingList.addAll(savedItems);
+    });
+  }
+
+  Future<void> addShoppingItem() async {
+    final String itemName = itemController.text.trim();
+    final String quantity = quantityController.text.trim();
+
+    if (itemName.isEmpty || quantity.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter an item and quantity.'),
         ),
+      );
 
-        // interactive item list
-        Expanded(
-          child: _shoppingList.isEmpty
-              ? const Center(
-            // Required backup text display when item list tracking is zero
-            child: Text(
-              "There are no items in the list",
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-          )
-              : ListView.builder(
-            itemCount: _shoppingList.length,
-            itemBuilder: (context, index) {
-              final currentItem = _shoppingList[index];
-              final rowNumber = index + 1;
+      return;
+    }
 
-              // 3: gesture detector tracking targeting individual rows
-              return GestureDetector(
-                onLongPress: () => _showDeleteDialog(index, currentItem.name),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Format: "X: ItemName quantity: Y" as requested and visually indicated
-                      Text(
-                        "$rowNumber: ${currentItem.name}  quantity: ${currentItem.quantity}",
-                        style: const TextStyle(fontSize: 16, color: Colors.black),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+    final ShoppingItem newItem = ShoppingItem(
+      name: itemName,
+      quantity: quantity,
+    );
+
+    final int generatedId =
+    await shoppingItemDao.insertItem(newItem);
+
+    final ShoppingItem savedItem = ShoppingItem(
+      id: generatedId,
+      name: itemName,
+      quantity: quantity,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      shoppingList.add(savedItem);
+    });
+
+    itemController.clear();
+    quantityController.clear();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$itemName added to the database.'),
+      ),
     );
   }
 
-  // Adds typed text elements to data arrays and mutates state
-  void _addItem() {
-    final String nameInput = _itemController.text.trim();
-    final String qtyInput = _quantityController.text.trim();
+  Future<void> deleteShoppingItem(ShoppingItem item) async {
+    await shoppingItemDao.deleteItem(item);
 
-    if (nameInput.isNotEmpty && qtyInput.isNotEmpty) {
-      setState(() {
-        // //1: Typing an item in the TextField and clicking the "add" button makes the item appear in the list.
-        _shoppingList.add(ShoppingItem(name: nameInput, quantity: qtyInput));
-
-        // //2: After inserting an item, the TextField is cleared so that the previous string is gone.
-        _itemController.clear();
-        _quantityController.clear();
-      });
+    if (!mounted) {
+      return;
     }
+
+    setState(() {
+      shoppingList.removeWhere(
+            (ShoppingItem shoppingItem) =>
+        shoppingItem.id == item.id,
+      );
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${item.name} deleted.'),
+      ),
+    );
   }
 
-  // Triggers an AlertDialog popup confirming item row processing deletion routines
-  void _showDeleteDialog(int index, String itemName) {
-    // //3: If the user long-presses an item in the list, an AlertDialog appears asking if they want to delete the item.
-    showDialog(
+  Future<void> showDeleteDialog(ShoppingItem item) async {
+    final bool? shouldDelete = await showDialog<bool>(
       context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text("Delete Item"),
-          content: Text("Are you sure you want to delete '$itemName'?"),
+          title: const Text('Delete item'),
+          content: Text(
+            'Do you want to delete ${item.name}?',
+          ),
           actions: [
             TextButton(
               onPressed: () {
-                // //task 5: Selecting "No" from the AlertDialog does not remove the item from the list.
-                Navigator.of(context).pop();
+                Navigator.pop(dialogContext, false);
               },
-              child: const Text("No"),
+              child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                // //task 4: Selecting "Yes" from the AlertDialog removes the item from the list.
-                setState(() {
-                  _shoppingList.removeAt(index);
-                });
-                Navigator.of(context).pop();
+                Navigator.pop(dialogContext, true);
               },
-              child: const Text("Yes", style: TextStyle(color: Colors.red)),
+              child: const Text('Delete'),
             ),
           ],
         );
       },
     );
+
+    if (shouldDelete == true) {
+      await deleteShoppingItem(item);
+    }
   }
 
   @override
   void dispose() {
-    _itemController.dispose();
-    _quantityController.dispose();
+    itemController.dispose();
+    quantityController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Flutter Demo Home Page'),
-        centerTitle: true,
-        elevation: 0,
+        title: const Text('Shopping List'),
+        backgroundColor:
+        Theme.of(context).colorScheme.inversePrimary,
       ),
-      // Running clean decoupled function tracking UI components
-      body: ListPage(),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              controller: itemController,
+              decoration: const InputDecoration(
+                labelText: 'Shopping item',
+                hintText: 'Example: Milk',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: quantityController,
+              decoration: const InputDecoration(
+                labelText: 'Quantity',
+                hintText: 'Example: 2',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: addShoppingItem,
+                child: const Text('Click Here'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: shoppingList.isEmpty
+                  ? const Center(
+                child: Text(
+                  'No shopping items have been added.',
+                ),
+              )
+                  : ListView.builder(
+                itemCount: shoppingList.length,
+                itemBuilder:
+                    (BuildContext context, int index) {
+                  final ShoppingItem item =
+                  shoppingList[index];
+
+                  return Card(
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.shopping_cart,
+                      ),
+                      title: Text(item.name),
+                      subtitle: Text(
+                        'Quantity: ${item.quantity}',
+                      ),
+                      trailing: const Icon(
+                        Icons.touch_app,
+                      ),
+                      onLongPress: () {
+                        showDeleteDialog(item);
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
